@@ -3,7 +3,7 @@ import {
   View, Text, FlatList, StyleSheet,
   TouchableOpacity, ViewToken, ActivityIndicator,
   Modal, TextInput, KeyboardAvoidingView, Platform,
-  Alert, StatusBar, useWindowDimensions
+  Alert, StatusBar, useWindowDimensions, Share
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { VideoView, useVideoPlayer } from 'expo-video';
@@ -18,7 +18,7 @@ import { db } from '../../utils/firebase';
 import { useStore } from '../../store/useStore';
 
 // ? Komponen per item video
-const VideoItem = ({ item, isActive, onLike, onComment, onSave, videoHeight, videoWidth, bottomInset }: any) => {
+const VideoItem = ({ item, isActive, onLike, onComment, onSave, onShare, videoHeight, videoWidth, bottomInset }: any) => {
   const [isPaused, setIsPaused] = useState(false);
   const [progress, setProgress] = useState(0);
   const progressInterval = useRef<any>(null);
@@ -135,7 +135,7 @@ const VideoItem = ({ item, isActive, onLike, onComment, onSave, videoHeight, vid
             <Text style={styles.actionText}>Simpan</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionBtn}>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => onShare(item)}>
             <Ionicons name="arrow-redo-outline" size={30} color="#fff" />
             <Text style={styles.actionText}>Share</Text>
           </TouchableOpacity>
@@ -283,7 +283,17 @@ export default function VideoFeedScreen({ navigation }: any) {
       Alert.alert('Gagal', 'Tidak bisa menyimpan video');
     }
   };
-
+  const handleShare = async (post: any) => {
+    try {
+      const shareMessage = `Lihat video dari @${post.userDisplayName}\n\n${post.caption}\n\n🎥 Link: ${post.mediaURL}\n\nTonton di MediaNova!`;
+      await Share.share({
+        message: shareMessage,
+        title: 'Share Video',
+      });
+    } catch (error: any) {
+      console.log('Error sharing:', error.message);
+    }
+  };
   const openComments = async (postId: string) => {
     setSelectedPostId(postId);
     setCommentModal(true);
@@ -386,6 +396,7 @@ export default function VideoFeedScreen({ navigation }: any) {
             onLike={handleLike}
             onComment={openComments}
             onSave={handleSave}
+            onShare={handleShare}
             videoHeight={VIDEO_HEIGHT}
             videoWidth={width}
             bottomInset={insets.bottom}

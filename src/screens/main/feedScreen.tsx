@@ -42,7 +42,7 @@ const VideoPreview = ({ uri, isVisible }: { uri: string; isVisible: boolean }) =
 };
 
 export default function FeedScreen() {
-  const { posts, setPosts, currentUser } = useStore();
+  const { posts, setPosts, currentUser, isDarkMode } = useStore();
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [commentModal, setCommentModal] = useState(false);
@@ -102,7 +102,7 @@ export default function FeedScreen() {
     } catch (error) {
       console.log(error);
     }
-  }, [posts, currentUser]);
+  }, [posts, currentUser, isDarkMode]);
 
   const openComments = useCallback(async (postId: string) => {
     setSelectedPostId(postId);
@@ -168,15 +168,23 @@ export default function FeedScreen() {
     }
   }, []);
 
-  const renderPost = useCallback(({ item }: any) => (
+  const renderPost = useCallback(({ item }: any) => {
+  const bgColor = isDarkMode ? '#000' : '#f5f5f5';
+  const cardColor = isDarkMode ? '#111' : '#fff';
+  const textColor = isDarkMode ? '#fff' : '#000';
+  const subTextColor = isDarkMode ? '#aaa' : '#666';
+  const borderColor = isDarkMode ? '#222' : '#ddd';
+
+  return (
     <View style={styles.postCard}>
+      {/* ... isi konten komponen kamu ... */}
       <View style={styles.postHeader}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>
             {item.userDisplayName?.charAt(0).toUpperCase()}
           </Text>
         </View>
-        <Text style={styles.username}>{item.userDisplayName}</Text>
+        <Text style={[styles.username, { color: textColor }]}>{item.userDisplayName}</Text>
       </View>
 
       {item.mediaType === 'image' && item.mediaURL ? (
@@ -184,7 +192,6 @@ export default function FeedScreen() {
       ) : item.mediaType === 'audio' && item.mediaURL ? (
         <AudioPlayer uri={item.mediaURL} caption={item.caption} />
       ) : item.mediaType === 'video' && item.mediaURL ? (
-        // ✅ Kirim isVisible berdasarkan apakah ID ini yang sedang terlihat
         <VideoPreview
           uri={item.mediaURL}
           isVisible={visibleVideoId === item.id}
@@ -196,10 +203,7 @@ export default function FeedScreen() {
       )}
 
       <View style={styles.postActions}>
-        <TouchableOpacity
-          style={styles.actionBtn}
-          onPress={() => handleLike(item.id, item.isLiked)}
-        >
+        <TouchableOpacity style={styles.actionBtn} onPress={() => handleLike(item.id, item.isLiked)}>
           <Ionicons
             name={item.isLiked ? 'heart' : 'heart-outline'}
             size={24}
@@ -208,10 +212,7 @@ export default function FeedScreen() {
           <Text style={styles.actionCount}>{item.likesCount || 0}</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.actionBtn}
-          onPress={() => openComments(item.id)}
-        >
+        <TouchableOpacity style={styles.actionBtn} onPress={() => openComments(item.id)}>
           <Ionicons name="chatbubble-outline" size={22} color="#fff" />
           <Text style={styles.actionCount}>{item.commentsCount || 0}</Text>
         </TouchableOpacity>
@@ -224,15 +225,8 @@ export default function FeedScreen() {
         </Text>
       ) : null}
     </View>
-  ), [visibleVideoId, handleLike, openComments]);
-
-  if (loading && posts.length === 0) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#E91E63" />
-      </View>
-    );
-  }
+  );
+}, [visibleVideoId, handleLike, openComments, isDarkMode]);
 
   return (
     <View style={styles.container}>
