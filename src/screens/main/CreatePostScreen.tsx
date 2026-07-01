@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { db } from '../../utils/firebase';
 import { useStore } from '../../store/useStore';
 import { uploadToCloudinary } from '../../utils/cloudinary';
+import { showLocalNotification } from '../../utils/notifications';
 
 const TEXT_COLORS = ['#ffffff', '#000000', '#E91E63', '#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff8800'];
 const TEXT_POSITIONS = ['top', 'center', 'bottom'];
@@ -22,6 +23,8 @@ export default function CreatePostScreen({ navigation, route }: any) {
   const [mediaType, setMediaType] = useState<'image' | 'video' | 'audio'>('image');
   const [loading, setLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [audioTitle, setAudioTitle] = useState('');
+  const [audioDescription, setAudioDescription] = useState('');
 
   // Text overlay state
   const [showTextOverlay, setShowTextOverlay] = useState(false);
@@ -98,6 +101,8 @@ export default function CreatePostScreen({ navigation, route }: any) {
         mediaURL,
         mediaType,
         caption,
+        audioTitle: mediaType === 'audio' ? audioTitle.trim() : '',
+        audioDescription: mediaType === 'audio' ? audioDescription.trim() : '',
         textOverlay: savedOverlayText || '',
         textColor,
         textPosition,
@@ -122,9 +127,12 @@ export default function CreatePostScreen({ navigation, route }: any) {
       });
 
       setCaption('');
+      setAudioTitle('');
+      setAudioDescription('');
       setMediaUri(null);
       setSavedOverlayText('');
       setUploadProgress(0);
+      await showLocalNotification('Post berhasil dibuat', 'Konten kamu sudah tampil di feed MediaNova.');
       Alert.alert('Berhasil! 🎉', 'Post berhasil dibuat!');
     } catch (error: any) {
       Alert.alert('Gagal', error.message);
@@ -260,6 +268,27 @@ export default function CreatePostScreen({ navigation, route }: any) {
 
       {/* Caption */}
       <View style={styles.captionBox}>
+        {mediaType === 'audio' && (
+          <>
+            <TextInput
+              style={styles.captionInput}
+              placeholder="Judul audio / podcast..."
+              placeholderTextColor="#888"
+              value={audioTitle}
+              onChangeText={setAudioTitle}
+              maxLength={80}
+            />
+            <TextInput
+              style={[styles.captionInput, styles.audioDescriptionInput]}
+              placeholder="Deskripsi audio..."
+              placeholderTextColor="#888"
+              value={audioDescription}
+              onChangeText={setAudioDescription}
+              multiline
+              maxLength={240}
+            />
+          </>
+        )}
         <TextInput
           style={styles.captionInput}
           placeholder="Tulis caption..."
@@ -398,6 +427,7 @@ const styles = StyleSheet.create({
   removeBtnText: { color: '#E91E63', fontSize: 13 },
   captionBox: { margin: 12 },
   captionInput: { backgroundColor: '#111', borderRadius: 12, padding: 14, color: '#fff', fontSize: 15, minHeight: 80, textAlignVertical: 'top', borderWidth: 1, borderColor: '#333' },
+  audioDescriptionInput: { marginTop: 10 },
   charCount: { color: '#888', textAlign: 'right', marginTop: 4, fontSize: 12 },
   progressBox: { marginHorizontal: 12, marginBottom: 8 },
   progressText: { color: '#fff', marginBottom: 6, textAlign: 'center' },

@@ -29,7 +29,8 @@
     },
     "plugins": [
       "expo-video",
-      "expo-font"
+      "expo-font",
+      "expo-notifications"
     ]
   }
 }

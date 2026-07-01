@@ -7,12 +7,17 @@ import {
 import { VideoView, useVideoPlayer } from 'expo-video';
 import {
   collection, query, orderBy, limit, getDocs,
-  doc, updateDoc, increment, addDoc, serverTimestamp
+  doc, updateDoc, increment, addDoc, serverTimestamp,
+  startAfter, DocumentSnapshot
 } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db } from '../../utils/firebase';
 import { useStore } from '../../store/useStore';
 import AudioPlayer from '../../components/AudioPlayer';
+
+const FEED_CACHE_KEY = 'medianova.feed.cache.v1';
+const PAGE_SIZE = 10;
 
 // ✅ VideoPreview sekarang menerima prop `isVisible` untuk pause/play otomatis
 const VideoPreview = ({ uri, isVisible }: { uri: string; isVisible: boolean }) => {
@@ -50,14 +55,36 @@ export default function FeedScreen() {
   const [comments, setComments] = useState<any[]>([]);
   const [commentText, setCommentText] = useState('');
   const [commentLoading, setCommentLoading] = useState(false);
+  const [lastVisible, setLastVisible] = useState<DocumentSnapshot | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   // ✅ Track video mana yang sedang terlihat di layar
   const [visibleVideoId, setVisibleVideoId] = useState<string | null>(null);
 
+  const saveFeedCache = async (items: any[]) => {
+    try {
+      await AsyncStorage.setItem(FEED_CACHE_KEY, JSON.stringify(items));
+    } catch (error) {
+      console.log('Failed to cache feed:', error);
+    }
+  };
+
+  const loadFeedCache = async () => {
+    try {
+      const cached = await AsyncStorage.getItem(FEED_CACHE_KEY);
+      if (cached && posts.length === 0) {
+        setPosts(JSON.parse(cached));
+      }
+    } catch (error) {
+      console.log('Failed to load cached feed:', error);
+    }
+  };
+
   const fetchPosts = async () => {
     setLoading(true);
     try {
-      const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(20));
+      const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(PAGE_SIZE));
       const snapshot = await getDocs(q);
       const fetchedPosts = snapshot.docs.map(d => ({
         id: d.id,
@@ -65,10 +92,42 @@ export default function FeedScreen() {
         isLiked: false,
       })) as any[];
       setPosts(fetchedPosts);
+      setLastVisible(snapshot.docs[snapshot.docs.length - 1] || null);
+      setHasMore(snapshot.docs.length === PAGE_SIZE);
+      await saveFeedCache(fetchedPosts);
+    } catch (error) {
+      console.log(error);
+      await loadFeedCache();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchMorePosts = async () => {
+    if (loadingMore || loading || !hasMore || !lastVisible) return;
+    setLoadingMore(true);
+    try {
+      const q = query(
+        collection(db, 'posts'),
+        orderBy('createdAt', 'desc'),
+        startAfter(lastVisible),
+        limit(PAGE_SIZE)
+      );
+      const snapshot = await getDocs(q);
+      const fetchedPosts = snapshot.docs.map(d => ({
+        id: d.id,
+        ...d.data(),
+        isLiked: false,
+      })) as any[];
+      const merged = [...posts, ...fetchedPosts];
+      setPosts(merged);
+      setLastVisible(snapshot.docs[snapshot.docs.length - 1] || lastVisible);
+      setHasMore(snapshot.docs.length === PAGE_SIZE);
+      await saveFeedCache(merged);
     } catch (error) {
       console.log(error);
     } finally {
-      setLoading(false);
+      setLoadingMore(false);
     }
   };
 
@@ -147,7 +206,10 @@ export default function FeedScreen() {
     setRefreshing(false);
   };
 
-  useEffect(() => { fetchPosts(); }, []);
+  useEffect(() => {
+    loadFeedCache();
+    fetchPosts();
+  }, []);
 
   // ✅ Viewability config: video dianggap "terlihat" kalau 60% atau lebih ada di layar
   const viewabilityConfig = useRef({
@@ -190,7 +252,7 @@ export default function FeedScreen() {
       {item.mediaType === 'image' && item.mediaURL ? (
         <Image source={{ uri: item.mediaURL }} style={styles.postImage} />
       ) : item.mediaType === 'audio' && item.mediaURL ? (
-        <AudioPlayer uri={item.mediaURL} caption={item.caption} />
+        <AudioPlayer uri={item.mediaURL} caption={item.audioTitle || item.caption} />
       ) : item.mediaType === 'video' && item.mediaURL ? (
         <VideoPreview
           uri={item.mediaURL}
@@ -245,8 +307,15 @@ export default function FeedScreen() {
         // ✅ Pasang viewability handler di sini
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
+        onEndReached={fetchMorePosts}
+        onEndReachedThreshold={0.6}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#E91E63" />
+        }
+        ListFooterComponent={
+          loadingMore ? (
+            <ActivityIndicator color="#E91E63" style={{ marginVertical: 20 }} />
+          ) : null
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>

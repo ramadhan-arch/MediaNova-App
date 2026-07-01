@@ -65,10 +65,13 @@ export default function CameraFilterScreen({ navigation }: any) {
   const [selectedSticker, setSelectedSticker] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'filter' | 'beauty' | 'sticker'>('filter');
+  const [timerEnabled, setTimerEnabled] = useState(false);
+  const [countdown, setCountdown] = useState(0);
 
   // Beauty filter values
   const [brightness, setBrightness] = useState(1.0);
   const [contrast, setContrast] = useState(1.0);
+  const [saturation, setSaturation] = useState(1.0);
 
   const pickImage = async () => {
     const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -88,6 +91,13 @@ export default function CameraFilterScreen({ navigation }: any) {
   const takePhoto = async () => {
     const { granted } = await ImagePicker.requestCameraPermissionsAsync();
     if (!granted) { Alert.alert('Error', 'Butuh izin kamera!'); return; }
+    if (timerEnabled) {
+      for (let i = 3; i > 0; i -= 1) {
+        setCountdown(i);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      setCountdown(0);
+    }
     const result = await ImagePicker.launchCameraAsync({ quality: 0.9, allowsEditing: true });
     if (!result.canceled) {
       setOriginalImage(result.assets[0].uri);
@@ -131,6 +141,13 @@ export default function CameraFilterScreen({ navigation }: any) {
         { format: SaveFormat.JPEG, compress: brightness > 1 ? 0.95 : 0.8 }
       );
       setFilteredImage(result.uri);
+      if (saturation > 1.05) {
+        setActiveTint('rgba(233, 30, 99, 0.10)');
+      } else if (saturation < 0.95) {
+        setActiveTint('rgba(120, 120, 120, 0.18)');
+      } else {
+        setActiveTint(null);
+      }
     } catch (e) {
       console.log(e);
     } finally {
@@ -180,6 +197,11 @@ export default function CameraFilterScreen({ navigation }: any) {
                 <Text style={styles.loadingText}>Memproses...</Text>
               </View>
             )}
+            {countdown > 0 && (
+              <View style={styles.countdownOverlay}>
+                <Text style={styles.countdownText}>{countdown}</Text>
+              </View>
+            )}
           </View>
         ) : (
           <View style={styles.placeholder}>
@@ -197,7 +219,14 @@ export default function CameraFilterScreen({ navigation }: any) {
         </TouchableOpacity>
         <TouchableOpacity style={styles.pickerBtn} onPress={takePhoto}>
           <Ionicons name="camera-outline" size={18} color="#fff" />
-          <Text style={styles.pickerBtnText}>Kamera</Text>
+          <Text style={styles.pickerBtnText}>{timerEnabled ? 'Timer 3s' : 'Kamera'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.pickerBtn, timerEnabled && styles.timerBtnActive]}
+          onPress={() => setTimerEnabled(prev => !prev)}
+        >
+          <Ionicons name="timer-outline" size={18} color="#fff" />
+          <Text style={styles.pickerBtnText}>3,2,1</Text>
         </TouchableOpacity>
       </View>
 
@@ -277,6 +306,25 @@ export default function CameraFilterScreen({ navigation }: any) {
             </TouchableOpacity>
           </View>
 
+          <View style={styles.sliderRow}>
+            <Text style={styles.sliderLabel}>Saturation</Text>
+            <Text style={styles.sliderValue}>{saturation.toFixed(1)}</Text>
+          </View>
+          <View style={styles.sliderTrack}>
+            <TouchableOpacity
+              style={styles.sliderMinus}
+              onPress={() => setSaturation(Math.max(0.5, saturation - 0.1))}
+            >
+              <Text style={styles.sliderBtnText}>-</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.sliderPlus}
+              onPress={() => setSaturation(Math.min(2.0, saturation + 0.1))}
+            >
+              <Text style={styles.sliderBtnText}>+</Text>
+            </TouchableOpacity>
+          </View>
+
           <TouchableOpacity
             style={styles.applyBeautyBtn}
             onPress={applyBeautyFilter}
@@ -320,10 +368,13 @@ const styles = StyleSheet.create({
   stickerOverlay: { position: 'absolute', top: '35%', left: '40%', fontSize: 52 },
   loadingOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', gap: 12 },
   loadingText: { color: '#fff', fontSize: 14 },
+  countdownOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.35)' },
+  countdownText: { color: '#fff', fontSize: 96, fontWeight: 'bold' },
   placeholder: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
   placeholderText: { color: '#555', fontSize: 16 },
   pickerButtons: { flexDirection: 'row', justifyContent: 'center', gap: 12, paddingHorizontal: 16, marginBottom: 8 },
   pickerBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#111', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: '#333' },
+  timerBtnActive: { backgroundColor: '#E91E63', borderColor: '#E91E63' },
   pickerBtnText: { color: '#fff', fontSize: 14 },
   tabRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#222', marginBottom: 8 },
   tabBtn: { flex: 1, paddingVertical: 10, alignItems: 'center' },

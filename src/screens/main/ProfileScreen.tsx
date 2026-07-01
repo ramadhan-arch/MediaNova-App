@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, Alert, Switch, ActivityIndicator
+  ScrollView, Alert, Switch, ActivityIndicator, Modal, TextInput
 } from 'react-native';
-import { signOut } from 'firebase/auth';
+import { signOut, updateProfile } from 'firebase/auth';
 import {
   doc, getDoc, updateDoc, arrayUnion, arrayRemove, increment
 } from 'firebase/firestore';
@@ -12,10 +12,13 @@ import { auth, db } from '../../utils/firebase';
 import { useStore } from '../../store/useStore';
 
 export default function ProfileScreen({ route }: any) {
-  const { currentUser, isDarkMode, toggleDarkMode } = useStore();
+  const { currentUser, isDarkMode, toggleDarkMode, setCurrentUser } = useStore();
   const [loading, setLoading] = useState(false);
   const [profileData, setProfileData] = useState<any>(null);
   const [isFollowing, setIsFollowing] = useState(false);
+  const [editVisible, setEditVisible] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editBio, setEditBio] = useState('');
 
   const isOwnProfile = !route?.params?.userId ||
     route?.params?.userId === currentUser?.uid;
@@ -76,6 +79,47 @@ export default function ProfileScreen({ route }: any) {
       }
     } catch (e) {
       Alert.alert('Error', 'Gagal follow/unfollow');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openEditProfile = () => {
+    setEditName(profileData?.displayName || currentUser?.displayName || '');
+    setEditBio(profileData?.bio || currentUser?.bio || '');
+    setEditVisible(true);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!currentUser?.uid) return;
+    if (!editName.trim()) {
+      Alert.alert('Error', 'Nama tidak boleh kosong');
+      return;
+    }
+    setLoading(true);
+    try {
+      if (auth.currentUser) {
+        await updateProfile(auth.currentUser, { displayName: editName.trim() });
+      }
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        displayName: editName.trim(),
+        bio: editBio.trim(),
+      });
+      const updatedUser = {
+        ...currentUser,
+        displayName: editName.trim(),
+        bio: editBio.trim(),
+      };
+      setCurrentUser(updatedUser);
+      setProfileData((prev: any) => ({
+        ...prev,
+        displayName: editName.trim(),
+        bio: editBio.trim(),
+      }));
+      setEditVisible(false);
+      Alert.alert('Berhasil', 'Profile berhasil diperbarui');
+    } catch (e) {
+      Alert.alert('Error', 'Gagal menyimpan profile');
     } finally {
       setLoading(false);
     }
@@ -148,6 +192,13 @@ export default function ProfileScreen({ route }: any) {
             }
           </TouchableOpacity>
         )}
+
+        {isOwnProfile && (
+          <TouchableOpacity style={styles.editBtn} onPress={openEditProfile}>
+            <Ionicons name="create-outline" size={18} color="#fff" />
+            <Text style={styles.editBtnText}>Edit Profile</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {isOwnProfile && (
@@ -178,6 +229,57 @@ export default function ProfileScreen({ route }: any) {
           </TouchableOpacity>
         </>
       )}
+
+      <Modal
+        visible={editVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setEditVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContainer, { backgroundColor: cardColor }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: textColor }]}>Edit Profile</Text>
+              <TouchableOpacity onPress={() => setEditVisible(false)}>
+                <Ionicons name="close" size={24} color={subTextColor} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.inputLabel, { color: subTextColor }]}>Nama</Text>
+            <TextInput
+              style={[styles.input, { color: textColor, borderColor: isDarkMode ? '#333' : '#ddd' }]}
+              placeholder="Nama lengkap"
+              placeholderTextColor={subTextColor}
+              value={editName}
+              onChangeText={setEditName}
+              maxLength={40}
+            />
+
+            <Text style={[styles.inputLabel, { color: subTextColor }]}>Bio</Text>
+            <TextInput
+              style={[styles.input, styles.bioInput, { color: textColor, borderColor: isDarkMode ? '#333' : '#ddd' }]}
+              placeholder="Ceritakan tentang kamu"
+              placeholderTextColor={subTextColor}
+              value={editBio}
+              onChangeText={setEditBio}
+              multiline
+              maxLength={140}
+            />
+            <Text style={[styles.charCount, { color: subTextColor }]}>{editBio.length}/140</Text>
+
+            <TouchableOpacity
+              style={styles.saveBtn}
+              onPress={handleSaveProfile}
+              disabled={loading}
+            >
+              {loading
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.saveBtnText}>Simpan</Text>
+              }
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -198,6 +300,8 @@ const styles = StyleSheet.create({
   followBtn: { backgroundColor: '#E91E63', paddingHorizontal: 40, paddingVertical: 10, borderRadius: 24 },
   followingBtn: { backgroundColor: '#333' },
   followBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
+  editBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#E91E63', paddingHorizontal: 28, paddingVertical: 10, borderRadius: 24, marginTop: 8 },
+  editBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
   section: { marginBottom: 12, padding: 16 },
   sectionTitle: { fontSize: 12, marginBottom: 12, textTransform: 'uppercase' },
   settingItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8 },
@@ -205,4 +309,14 @@ const styles = StyleSheet.create({
   settingLabel: { fontSize: 16 },
   logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, margin: 16, backgroundColor: '#1a0000', borderWidth: 1, borderColor: '#ff3333', borderRadius: 12, padding: 16 },
   logoutText: { color: '#ff3333', fontSize: 16, fontWeight: 'bold' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
+  modalContainer: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  modalTitle: { fontSize: 18, fontWeight: 'bold' },
+  inputLabel: { fontSize: 12, fontWeight: 'bold', marginBottom: 8, textTransform: 'uppercase' },
+  input: { borderWidth: 1, borderRadius: 12, padding: 14, fontSize: 15, marginBottom: 14 },
+  bioInput: { minHeight: 90, textAlignVertical: 'top' },
+  charCount: { alignSelf: 'flex-end', fontSize: 12, marginTop: -8, marginBottom: 16 },
+  saveBtn: { backgroundColor: '#E91E63', borderRadius: 12, padding: 15, alignItems: 'center' },
+  saveBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
 });

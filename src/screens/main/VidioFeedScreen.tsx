@@ -11,7 +11,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   collection, query, where, orderBy, limit, getDocs,
-  doc, updateDoc, increment, addDoc, serverTimestamp
+  doc, updateDoc, increment, addDoc, serverTimestamp,
+  startAfter, DocumentSnapshot
 } from 'firebase/firestore';
 import * as MediaLibrary from 'expo-media-library';
 import { db } from '../../utils/firebase';
@@ -21,6 +22,7 @@ import { useStore } from '../../store/useStore';
 const VideoItem = ({ item, isActive, onLike, onComment, onSave, onShare, videoHeight, videoWidth, bottomInset }: any) => {
   const [isPaused, setIsPaused] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [captionExpanded, setCaptionExpanded] = useState(false);
   const progressInterval = useRef<any>(null);
 
   const player = useVideoPlayer(item.mediaURL || null, (p) => {
@@ -154,9 +156,23 @@ const VideoItem = ({ item, isActive, onLike, onComment, onSave, onShare, videoHe
             </View>
             <View style={[styles.creatorDetails, { maxWidth: videoWidth - 140, paddingRight: 10 }] }>
               <Text style={styles.videoUsername}>@{item.userDisplayName}</Text>
-              <Text style={styles.videoCaption} numberOfLines={2} ellipsizeMode="tail">
-                {item.caption}
-              </Text>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => setCaptionExpanded(prev => !prev)}
+              >
+                <Text
+                  style={styles.videoCaption}
+                  numberOfLines={captionExpanded ? undefined : 2}
+                  ellipsizeMode="tail"
+                >
+                  {item.caption}
+                </Text>
+                {item.caption?.length > 80 && (
+                  <Text style={styles.readMoreText}>
+                    {captionExpanded ? 'Show Less' : 'Read More'}
+                  </Text>
+                )}
+              </TouchableOpacity>
             </View>
           </View>
           {item.musicTitle && (
@@ -184,6 +200,9 @@ export default function VideoFeedScreen({ navigation }: any) {
   const [comments, setComments] = useState<any[]>([]);
   const [commentText, setCommentText] = useState('');
   const [commentLoading, setCommentLoading] = useState(false);
+  const [lastVisible, setLastVisible] = useState<DocumentSnapshot | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const { height, width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -207,6 +226,8 @@ export default function VideoFeedScreen({ navigation }: any) {
       );
       const snap = await getDocs(q);
       let data = snap.docs.map(d => ({ id: d.id, ...d.data(), isLiked: false, isSaved: false }));
+      setLastVisible(snap.docs[snap.docs.length - 1] || null);
+      setHasMore(snap.docs.length === 20);
 
       // Fallback jika query utama kosong
       if (!data || data.length === 0) {
@@ -232,6 +253,29 @@ export default function VideoFeedScreen({ navigation }: any) {
       console.log('Primary video fetch failed', e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchMoreVideos = async () => {
+    if (loadingMore || !hasMore || !lastVisible) return;
+    setLoadingMore(true);
+    try {
+      const q = query(
+        collection(db, 'posts'),
+        where('mediaType', '==', 'video'),
+        orderBy('createdAt', 'desc'),
+        startAfter(lastVisible),
+        limit(10)
+      );
+      const snap = await getDocs(q);
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data(), isLiked: false, isSaved: false }));
+      setVideos(prev => [...prev, ...data]);
+      setLastVisible(snap.docs[snap.docs.length - 1] || lastVisible);
+      setHasMore(snap.docs.length === 10);
+    } catch (e) {
+      console.log('Fetch more videos failed', e);
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -409,6 +453,13 @@ export default function VideoFeedScreen({ navigation }: any) {
         snapToAlignment="start"
         onViewableItemsChanged={onViewRef.current}
         viewabilityConfig={viewabilityConfig}
+        onEndReached={fetchMoreVideos}
+        onEndReachedThreshold={0.8}
+        ListFooterComponent={
+          loadingMore ? (
+            <ActivityIndicator color="#E91E63" style={{ paddingVertical: 20 }} />
+          ) : null
+        }
         initialNumToRender={3}
         windowSize={5}
         removeClippedSubviews={true}
@@ -556,6 +607,7 @@ const styles = StyleSheet.create({
   },
   videoUsername: { color: '#fff', fontWeight: 'bold', fontSize: 15, marginBottom: 4, textShadowColor: '#000', textShadowRadius: 4 },
   videoCaption: { color: '#eee', fontSize: 13, textShadowColor: '#000', textShadowRadius: 4, lineHeight: 18 },
+  readMoreText: { color: '#fff', fontSize: 12, fontWeight: 'bold', marginTop: 3, textShadowColor: '#000', textShadowRadius: 4 },
   modalOverlay: { flex: 1, justifyContent: 'flex-end' },
   modalContainer: { backgroundColor: '#111', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '70%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#222' },

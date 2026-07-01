@@ -8,6 +8,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from './src/utils/firebase';
 import { useStore } from './src/store/useStore';
+import { setupLocalNotifications } from './src/utils/notifications';
 
 // Auth Screens
 import LoginScreen from './src/screens/auth/LoginScreen';
@@ -53,6 +54,8 @@ function MainTabs() {
             return <Ionicons name={focused ? 'home' : 'home-outline'} size={24} color={color} />;
           } else if (route.name === 'VideoFeed') {
             return <Ionicons name={focused ? 'play-circle' : 'play-circle-outline'} size={24} color={color} />;
+          } else if (route.name === 'Search') {
+            return <Ionicons name={focused ? 'search' : 'search-outline'} size={24} color={color} />;
           } else if (route.name === 'CreatePost') {
             return (
               <View style={{
@@ -75,6 +78,7 @@ function MainTabs() {
     >
       <Tab.Screen name="Feed" component={FeedScreen} options={{ tabBarLabel: 'Home' }} />
       <Tab.Screen name="VideoFeed" component={VideoFeedScreen} options={{ tabBarLabel: 'Video' }} />
+      <Tab.Screen name="Search" component={SearchScreen} options={{ tabBarLabel: 'Search' }} />
       <Tab.Screen name="CreatePost" component={CreatePostScreen} options={{ tabBarLabel: '' }} />
       <Tab.Screen name="Notifications" component={NotificationScreen} options={{ tabBarLabel: 'Notif' }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Profil' }} />
@@ -98,6 +102,10 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setupLocalNotifications().catch((error) => {
+      console.log('Notification setup error:', error);
+    });
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         // BUG FIX: jangan cuma andalkan user.displayName/photoURL dari Firebase Auth
